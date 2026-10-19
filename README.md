@@ -1,39 +1,30 @@
-# roblox-granny-system
+# Door & Key system + Granny animation hooks
 
-Looped Granny-style Roblox horror game system. This repository contains server-side AI and a round manager you can drop into a Roblox place.
+This patch adds:
+- ServerScriptService/DoorServer.lua — server-side handling for unlocking doors with keys (UseKeyRemote RemoteEvent)
+- ServerScriptService/GrannyAnimator.lua — listens for GrannyState BindableEvent and plays animations/sounds on the Granny model
+- ReplicatedStorage/GrannyAI.lua — updated to emit a BindableEvent (GrannyState) with state changes
+- ReplicatedStorage/Tools/KeyTool/KeyClient.lua — example LocalScript to place inside a Tool named "Key"; it requests unlocking of a target door via UseKeyRemote
 
-Files included
-- ReplicatedStorage/GrannyAI.lua — AI ModuleScript for Granny (patrol, hearing, sight, chase, attack)
-- ServerScriptService/GameServer.lua — Round manager that spawns/reset granny and items, loops rounds, and broadcasts round state
-- StarterGui/RoundUI.lua — example LocalScript that listens to RoundUpdate RemoteEvent and shows a small HUD
+How doors work
+1. Create a folder in Workspace named "Doors".
+2. Add door Models inside it. Each door Model should contain one or more BaseParts representing the door geometry.
+3. Optionally add a Bool attribute `Locked` (defaults to true if missing) and a Sound named `Unlock` under the door model.
+4. To unlock, give players a Tool named `Key` (or `Key_<DoorName>` for door-specific keys) with an optional attribute `KeyName` set to the door's name. Place that Tool under ReplicatedStorage.Tools and give it to players when the round starts.
 
-Quick setup
-1. Open Roblox Studio and create a new place or open your existing place.
-2. In ReplicatedStorage, add this ModuleScript and name it `GrannyAI` (paste the file content).
-3. In ServerScriptService, add a Script named `GameServer` and paste the GameServer.lua content.
-4. In StarterGui, add a LocalScript named `RoundUI` and paste the StarterGui/RoundUI.lua content.
+Notes on the Key Tool
+- The example LocalScript expects the Tool to be named "Key" or "Key_<DoorName>" and placed in ReplicatedStorage.Tools.KeyTool as a template.
+- When the player activates the tool while looking at a door (and in range), it sends a UseKeyRemote event to the server with the door's name. The server validates the player has a key tool and then unlocks the door.
 
-Map layout conventions (create these under `workspace.Map`):
-- Map (Model or Folder)
-  - Granny (Model) — include a Humanoid and set PrimaryPart to the root part
-  - GrannySpawn (Part) — optional; granny will be placed here at round start
-  - PatrolPoints (Folder) — Parts named in order (01,02,03...) representing patrol waypoints
-  - PlayerSpawn (SpawnLocation or Folder of Parts) — where players spawn each round
-  - Items (Folder) — tools/models that should be reset each round
+Granny animations & sounds
+- GrannyAI now fires a BindableEvent `ReplicatedStorage.GrannyState` with a payload {state = <string>, model = <grannyModel>} when the AI changes state (idle, patrol, chase, attack, investigate, search).
+- GrannyAnimator listens for that and plays Animation objects and Sound instances on the granny model. To use it, either:
+  - Put Animation objects under workspace.Map.Granny.Animations named Idle, Patrol, Chase, Attack, Investigate, Search; or
+  - Put them under ReplicatedStorage.GrannyAnimations with those names.
+- Add Sound instances under workspace.Map.Granny named Footstep, Scream, Attack, Unlock (Unlock is used for doors).
 
-Events and hooks
-- ReplicatedStorage.RoundUpdate (RemoteEvent) — created automatically by GameServer if missing. Clients receive {state = "running"|"ended"|..., timeLeft = n}
-- ReplicatedStorage.GrannyNoise (BindableEvent) — created automatically. Server forwards a RemoteEvent `GrannyNoiseRemote` if present.
-  - To signal a noise from client tools, create a RemoteEvent named `GrannyNoiseRemote` in ReplicatedStorage and call it from the client with a Vector3 position. The server will forward it securely to the bindable which notifies the AI.
+Next steps you might want:
+- Add a server script to give Key tools to players at round start (GameServer can be updated to clone tools from ReplicatedStorage.Tools into player.Backpack).
+- Replace the simple door opening with a hinge/tween for smooth animation.
+- Add visual indicators (ProximityPrompt) so players know a door is locked and can interact.
 
-Tuning
-- Adjust constants in ServerScriptService/GameServer.lua: ROUND_TIME, INTER_ROUND_WAIT, INFINITE_LOOP.
-- Adjust GrannyAI patrol/chase/detection parameters by changing the table passed to GrannyAI.new in GameServer.
-
-Next steps I can help with (tell me which):
-- Add door/key interaction scripts and examples (items that unlock doors)
-- Add animations hooks for Granny states (idle/walk/chase/attack)
-- Add sounds and scripted voice lines for ambience and chase
-- Add more polished UI (kill/revive states, escape counter, scoreboard)
-
-Repository URL: https://github.com/kalemlunca-stack/roblox-granny-system

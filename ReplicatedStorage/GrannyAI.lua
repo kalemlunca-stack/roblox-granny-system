@@ -1,26 +1,32 @@
--- GrannyAI ModuleScript
--- Place this file in ReplicatedStorage as GrannyAI
--- Usage:
--- local GrannyAI = require(game.ReplicatedStorage.GrannyAI)
--- local ai = GrannyAI.new(grannyModel, {PatrolPoints = folder, DetectionRange = 30})
--- ai:Start()
+-- Updated GrannyAI ModuleScript with state events
+-- Place this file in ReplicatedStorage as GrannyAI (overwrites previous)
 
 local PathfindingService = game:GetService("PathfindingService")
 local RunService = game:GetService("RunService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+-- Ensure a BindableEvent exists for Granny state changes
+local stateEvent = ReplicatedStorage:FindFirstChild("GrannyState")
+if not stateEvent then
+    local be = Instance.new("BindableEvent")
+    be.Name = "GrannyState"
+    be.Parent = ReplicatedStorage
+    stateEvent = be
+end
 
 local GrannyAI = {}
 GrannyAI.__index = GrannyAI
 
 local DEFAULTS = {
-    PatrolPoints = nil,         -- Folder in workspace containing Vector3 points or parts
+    PatrolPoints = nil,
     PatrolSpeed = 8,
     ChaseSpeed = 16,
-    DetectionRange = 28,        -- direct proximity
-    SightAngle = 100,           -- degrees for cone of vision
-    AttackDistance = 3,         -- distance to "attack" / kill
-    HearingRange = 20,          -- distance at which noises alert granny
+    DetectionRange = 28,
+    SightAngle = 100,
+    AttackDistance = 3,
+    HearingRange = 20,
     RepathInterval = 1.0,
-    SearchTime = 8,             -- seconds to search after losing the player
+    SearchTime = 8,
 }
 
 local function getDistance(a, b)
@@ -42,10 +48,7 @@ function GrannyAI.new(model, opts)
     for k,v in pairs(DEFAULTS) do
         self[k] = opts[k] ~= nil and opts[k] or v
     end
-    -- override defaults with provided opts
-    for k,v in pairs(opts) do
-        self[k] = v
-    end
+    for k,v in pairs(opts) do self[k] = v end
     self.Model = model
     self.Humanoid = model:FindFirstChildOfClass("Humanoid")
     self.PrimaryPart = model.PrimaryPart
@@ -55,19 +58,31 @@ function GrannyAI.new(model, opts)
     self._lastPath = nil
     self._isChasing = false
     self._lastSeenTime = 0
+    self._state = "idle"
     return self
 end
 
--- Call this to make granny "hear" a noise at position (Vector3). If within HearingRange she'll investigate.
+function GrannyAI:_setState(state)
+    if self._state == state then return end
+    self._state = state
+    -- Fire global BindableEvent so other scripts (animator/sounds) can respond
+    local ok, err = pcall(function()
+        stateEvent:Fire({state = state, model = self.Model})
+    end)
+    if not ok then
+        warn("Failed to fire GrannyState: ", err)
+    end
+end
+
 function GrannyAI:NotifyNoise(pos)
     if not self._running then return end
     if getDistance(self.PrimaryPart.Position, pos) <= self.HearingRange then
         self._investigatePos = pos
         self._isChasing = false
+        self:_setState("investigate")
     end
 end
 
--- Helper: find nearest player in detection criteria
 function GrannyAI:_findPlayer()
     local players = game:GetService("Players"):GetPlayers()
     local bestPlayer = nil
@@ -77,7 +92,6 @@ function GrannyAI:_findPlayer()
             local hrp = p.Character.HumanoidRootPart
             local dist = getDistance(self.PrimaryPart.Position, hrp.Position)
             if dist <= self.DetectionRange and dist < bestDist then
-                -- check FOV and line-of-sight simple raycast
                 if isInFOV(self.PrimaryPart.CFrame, self.PrimaryPart.Position, hrp.Position, self.SightAngle) then
                     local rayParams = RaycastParams.new()
                     rayParams.FilterType = Enum.RaycastFilterType.Blacklist
@@ -94,7 +108,6 @@ function GrannyAI:_findPlayer()
     return bestPlayer
 end
 
--- Create path to position using PathfindingService; returns table of waypoints or nil
 function GrannyAI:_computePath(destination)
     local start = self.PrimaryPart.Position
     local path = PathfindingService:CreatePath({
@@ -110,23 +123,20 @@ function GrannyAI:_computePath(destination)
     return points
 end
 
--- Follow waypoints (yields until done or interrupted)
 function GrannyAI:_followWaypoints(waypoints, moveSpeed, stopWhenClose)
     for _,wp in ipairs(waypoints) do
         if not self._running then return end
         local targetPos = wp.Position
         if self.Humanoid then
             self.Humanoid.WalkSpeed = moveSpeed
-            -- move by setting MoveTo on Humanoid, but also check for interruptions
             self.Humanoid:MoveTo(targetPos)
             local reached = self.Humanoid.MoveToFinished:Wait()
             if not reached then
-                -- timed out or path blocked — continue to next
+                -- continue
             end
             if stopWhenClose and getDistance(self.PrimaryPart.Position, targetPos) <= (stopWhenClose) then
                 return
             end
-            -- If we lock onto a player mid-follow, break to chase
             if self._isChasing then return end
         else
             wait(0.1)
@@ -138,10 +148,10 @@ function GrannyAI:_attackPlayer(player)
     if not player or not player.Character or not player.Character:FindFirstChild("HumanoidRootPart") then return end
     local hrp = player.Character.HumanoidRootPart
     if getDistance(self.PrimaryPart.Position, hrp.Position) <= self.AttackDistance then
-        -- instant kill (customize if you want damage over time)
         local charHum = player.Character:FindFirstChildOfClass("Humanoid")
         if charHum and charHum.Health > 0 then
             charHum.Health = 0
+            self:_setState("attack")
         end
     end
 end
@@ -151,15 +161,13 @@ function GrannyAI:Start()
     self._running = true
     spawn(function()
         while self._running do
-            -- check immediate player detection
             local detected = self:_findPlayer()
             if detected then
                 self._isChasing = true
                 self._currentTarget = detected
-                -- chase loop
+                self:_setState("chase")
                 while self._running and self._currentTarget and self._currentTarget.Character and self._currentTarget.Character:FindFirstChild("HumanoidRootPart") do
                     local targetPos = self._currentTarget.Character.HumanoidRootPart.Position
-                    -- attempt path, fall back to direct MoveTo
                     local waypoints = self:_computePath(targetPos)
                     if waypoints then
                         self:_followWaypoints(waypoints, self.ChaseSpeed)
@@ -169,9 +177,7 @@ function GrannyAI:Start()
                             self.Humanoid.MoveToFinished:Wait()
                         end
                     end
-                    -- attack if close
                     self:_attackPlayer(self._currentTarget)
-                    -- if target leaves sight, mark lastSeenTime and break to search
                     local dist = getDistance(self.PrimaryPart.Position, targetPos)
                     if dist > self.DetectionRange or not isInFOV(self.PrimaryPart.CFrame, self.PrimaryPart.Position, targetPos, self.SightAngle) then
                         self._lastSeenTime = tick()
@@ -179,16 +185,14 @@ function GrannyAI:Start()
                     end
                     wait(0.1)
                 end
-                -- search for a while
                 local startSearch = tick()
+                self:_setState("search")
                 while self._running and (tick() - startSearch) < self.SearchTime do
-                    -- if can reacquire player, break and chase
                     local reacquire = self:_findPlayer()
                     if reacquire then
                         detected = reacquire
                         break
                     end
-                    -- if we had an investigate pos, go there
                     if self._investigatePos then
                         local wp = self:_computePath(self._investigatePos)
                         if wp then
@@ -206,10 +210,9 @@ function GrannyAI:Start()
                 self._isChasing = false
                 self._currentTarget = nil
             else
-                -- no immediate detection: patrol
                 if self.PatrolPoints and self.PatrolPoints:IsA("Folder") and #self.PatrolPoints:GetChildren() > 0 then
+                    self:_setState("patrol")
                     local pts = self.PatrolPoints:GetChildren()
-                    -- ensure ordered
                     table.sort(pts, function(a,b) return a.Name < b.Name end)
                     local pt = pts[self._patrolIndex]
                     if pt then
@@ -227,7 +230,7 @@ function GrannyAI:Start()
                         wait(1)
                     end
                 else
-                    -- idle wander: just wait
+                    self:_setState("idle")
                     if self.Humanoid then
                         self.Humanoid.WalkSpeed = 0
                     end
@@ -241,10 +244,10 @@ end
 
 function GrannyAI:Stop()
     self._running = false
-    -- stop movement
     if self.Humanoid then
         self.Humanoid:MoveTo(self.PrimaryPart.Position)
     end
+    self:_setState("idle")
 end
 
 return GrannyAI
