@@ -1,129 +1,115 @@
--- EscapeManager.lua
+-- RewardsManager.lua
 -- Place in ServerScriptService
--- Handles the escape zone, marks players as escaped, and keeps the game loop aware of win conditions.
+-- Tracks player stats, round rewards, and persistent currency/XP in leaderstats.
 
 local Players = game:GetService("Players")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 
-local roundEvent = ReplicatedStorage:WaitForChild("RoundUpdate")
+local roundEvent = ReplicatedStorage:FindFirstChild("RoundUpdate")
 
-local function getMapEscapeZone()
-    local map = workspace:FindFirstChild("Map")
-    if not map then return nil end
-    return map:FindFirstChild("EscapeZone")
-end
+local DEFAULT_REWARD = {
+    escape = 100,
+    survive = 30,
+    win = 50,
+    death = 0,
+}
 
-local function getOrCreateEscapedValue(player)
-    local escaped = player:FindFirstChild("Escaped")
-    if not escaped then
-        escaped = Instance.new("BoolValue")
-        escaped.Name = "Escaped"
-        escaped.Value = false
-        escaped.Parent = player
+local function ensureLeaderstats(player)
+    if player:FindFirstChild("leaderstats") then
+        return player.leaderstats
     end
-    return escaped
+
+    local ls = Instance.new("Folder")
+    ls.Name = "leaderstats"
+    ls.Parent = player
+
+    local xp = Instance.new("IntValue")
+    xp.Name = "XP"
+    xp.Value = player:GetAttribute("XP") or 0
+    xp.Parent = ls
+
+    local coins = Instance.new("IntValue")
+    coins.Name = "Coins"
+    coins.Value = player:GetAttribute("Coins") or 0
+    coins.Parent = ls
+
+    local escapes = Instance.new("IntValue")
+    escapes.Name = "Escapes"
+    escapes.Value = player:GetAttribute("Escapes") or 0
+    escapes.Parent = ls
+
+    local rounds = Instance.new("IntValue")
+    rounds.Name = "Rounds"
+    rounds.Value = player:GetAttribute("Rounds") or 0
+    rounds.Parent = ls
+
+    return ls
 end
 
-local function countEscapedPlayers()
-    local count = 0
-    for _,player in ipairs(Players:GetPlayers()) do
-        local escaped = getOrCreateEscapedValue(player)
-        if escaped.Value then
-            count = count + 1
-        end
+local function getInt(player, name, default)
+    local value = player:GetAttribute(name)
+    if value == nil then
+        value = default
+        player:SetAttribute(name, value)
     end
-    return count
+    return value
 end
 
-local function broadcastEscapeState()
-    local total = #Players:GetPlayers()
-    local escaped = countEscapedPlayers()
-    local alive = 0
-    for _,player in ipairs(Players:GetPlayers()) do
-        local char = player.Character
-        if char then
-            local hum = char:FindFirstChildOfClass("Humanoid")
-            if hum and hum.Health > 0 then
-                alive = alive + 1
-            end
-        end
+local function syncLeaderstats(player)
+    local ls = ensureLeaderstats(player)
+    local xp = ls:FindFirstChild("XP")
+    local coins = ls:FindFirstChild("Coins")
+    local escapes = ls:FindFirstChild("Escapes")
+    local rounds = ls:FindFirstChild("Rounds")
+    if xp then xp.Value = getInt(player, "XP", 0) end
+    if coins then coins.Value = getInt(player, "Coins", 0) end
+    if escapes then escapes.Value = getInt(player, "Escapes", 0) end
+    if rounds then rounds.Value = getInt(player, "Rounds", 0) end
+end
+
+local function awardPlayer(player, rewardType)
+    local reward = DEFAULT_REWARD[rewardType] or 0
+    if reward <= 0 then return end
+
+    local xp = getInt(player, "XP", 0)
+    local coins = getInt(player, "Coins", 0)
+    xp = xp + reward
+    coins = coins + reward
+    player:SetAttribute("XP", xp)
+    player:SetAttribute("Coins", coins)
+    syncLeaderstats(player)
+end
+
+local function updateRoundStats(player, escaped, survivedSeconds)
+    local rounds = getInt(player, "Rounds", 0)
+    player:SetAttribute("Rounds", rounds + 1)
+    syncLeaderstats(player)
+
+    if escaped then
+        local escapes = getInt(player, "Escapes", 0)
+        player:SetAttribute("Escapes", escapes + 1)
+        awardPlayer(player, "escape")
+        awardPlayer(player, "win")
+    else
+        awardPlayer(player, "survive")
     end
-    roundEvent:FireAllClients({
-        state = "escape_update",
-        timeLeft = 0,
-        alive = alive,
-        escaped = escaped,
-        total = total,
-    })
-end
-
-local function onPlayerEscaped(player)
-    local escaped = getOrCreateEscapedValue(player)
-    if escaped.Value then return end
-    escaped.Value = true
-    player:SetAttribute("Escaped", true)
-    -- Keep players from being counted as alive later in the round loop
-    local char = player.Character
-    if char then
-        local hum = char:FindFirstChildOfClass("Humanoid")
-        if hum then
-            hum.WalkSpeed = 0
-            hum.JumpPower = 0
-        end
-    end
-    broadcastEscapeState()
-end
-
-local function setupEscapeZone(zone)
-    if not zone then return end
-    zone.Touched:Connect(function(hit)
-        local model = hit.Parent
-        if not model then return end
-        local player = Players:GetPlayerFromCharacter(model)
-        if not player then return end
-        local escaped = getOrCreateEscapedValue(player)
-        if escaped.Value then return end
-
-        local char = player.Character
-        if not char then return end
-        local root = char:FindFirstChild("HumanoidRootPart")
-        if not root then return end
-        if (root.Position - zone.Position).Magnitude <= (zone.Size.Magnitude * 0.5) + 3 then
-            onPlayerEscaped(player)
-        end
-    end)
-end
-
-local function resetAllEscapes()
-    for _,player in ipairs(Players:GetPlayers()) do
-        local escaped = getOrCreateEscapedValue(player)
-        escaped.Value = false
-        player:SetAttribute("Escaped", false)
-        local char = player.Character
-        if char then
-            local hum = char:FindFirstChildOfClass("Humanoid")
-            if hum then
-                hum.WalkSpeed = 16
-                hum.JumpPower = 50
-            end
-        end
-    end
-end
-
-local escapeZone = getMapEscapeZone()
-if escapeZone then
-    setupEscapeZone(escapeZone)
 end
 
 Players.PlayerAdded:Connect(function(player)
-    local escaped = getOrCreateEscapedValue(player)
-    escaped.Value = false
-    player:SetAttribute("Escaped", false)
+    syncLeaderstats(player)
+end)
+
+for _,player in ipairs(Players:GetPlayers()) do
+    syncLeaderstats(player)
+end
+
+roundEvent.OnServerEvent:Connect(function(player, payload)
+    if not payload then return end
+    updateRoundStats(player, payload.escaped == true, payload.survivedSeconds or 0)
 end)
 
 return {
-    resetAllEscapes = resetAllEscapes,
-    getMapEscapeZone = getMapEscapeZone,
-    countEscapedPlayers = countEscapedPlayers,
-    onPlayerEscaped = onPlayerEscaped,
+    awardPlayer = awardPlayer,
+    syncLeaderstats = syncLeaderstats,
+    updateRoundStats = updateRoundStats,
 }
