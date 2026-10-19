@@ -1,19 +1,19 @@
-# Door & Key system + Escape loop
+# Door & Key system + Escape loop + smarter AI
 
-This repository now includes a playable horror loop foundation:
-- server-side Granny AI with looped rounds
-- door unlocking via key tool
-- escape zone + win tracking
-- polished round HUD
+This project now includes a more complete horror-game loop with:
+- looped round system
+- Granny AI with chase/search and ambush behavior
+- door unlocking with key validation
+- escape win-state tracking
+- HUD + overlay feedback
+- atmospheric heartbeat-style sound effects
 
-Files included
-- ReplicatedStorage/GrannyAI.lua — AI ModuleScript for Granny (patrol, hearing, sight, chase, attack)
-- ServerScriptService/GameServer.lua — looped round manager and key distribution
-- ServerScriptService/DoorServer.lua — door unlock validation logic
-- ServerScriptService/EscapeManager.lua — escape zone tracking and player escape status
-- ServerScriptService/GrannyAnimator.lua — optional animation/sound hooks for Granny state changes
-- ReplicatedStorage/Tools/KeyTool/KeyClient.lua — client-side key interaction script
-- StarterGui/RoundUI.lua — HUD for timer and escape tracking
+Key updates
+- ReplicatedStorage/GrannyAI.lua — now includes simple hide and ambush behavior using `HidePoints` and `AmbushPoints` folders in `workspace.Map`
+- ServerScriptService/DoorServer.lua — unlocks doors with tweened motion, state tracking, and door locking behavior
+- ServerScriptService/AtmosphereController.lua — ambient heartbeat + horror sound logic based on distance from Granny
+- StarterGui/RoundOverlay.lua — end-of-round overlay for win/lose states
+- ServerScriptService/GameServer.lua — improved round loop and key distribution
 
 Map setup
 Create a Workspace.Map folder with these pieces:
@@ -21,31 +21,34 @@ Create a Workspace.Map folder with these pieces:
   - Granny (Model, with Humanoid and PrimaryPart)
   - GrannySpawn (Part)
   - PatrolPoints (Folder of waypoints)
+  - HidePoints (Folder of Part positions or Models) — used by Granny to hide/peek around corners
+  - AmbushPoints (Folder of Part positions or Models) — used by Granny to wait in ambush
   - PlayerSpawn (SpawnLocation or Part/Folder)
   - EscapeZone (Part) — players must touch this to escape
   - Doors (Folder) — door models to unlock with keys
   - Items (Folder) — optional items reset each round
 
 Door usage
-- Place each door in Workspace.Doors
-- Give each door a name matching the key tool name or set it to `MainDoor` by default
-- The included key tool is named `Key`, and the server gives one to each player every round
-- Activate the key while aiming at a door within range; the server validates and unlocks it
+- Place doors in Workspace.Doors
+- The keys are given automatically to players each round by GameServer
+- Use a Tool named `Key` or `Key_<DoorName>` while facing the door and within range
+- A door will unlock via tween animation and set `Locked = false` on the model
 
-Escape logic
-- Player `Escaped` BoolValue is set when they touch the EscapeZone part in Workspace.Map
-- The round ends when all players have escaped or everyone is dead
-- GameServer resets all escape values at the start of each round, then loops again automatically
+AI behavior notes
+- Granny will patrol and then move to ambush points if no player is detected
+- If a player is lost, Granny enters a search state and investigates the last known position
+- If players make noise or trigger an event, the AI can move toward the noise location
 
-Granny audio/animation hooks
-- GrannyAI fires `ReplicatedStorage.GrannyState` with `{state, model}`
-- GrannyAnimator listens and plays animation/sound assets if present under the Granny model or ReplicatedStorage.GrannyAnimations
-- Example sounds names: Footstep, Scream, Attack
+Atmosphere and effects
+- The AtmosphereController script listens to each player and plays a heartbeat sound when Granny gets close
+- The project is ready for more audio/artifacts like footsteps, static, and ambient sound assets under the Granny model or in a dedicated folder
 
-Recommended next upgrades
-- Add smarter AI hiding/ambush logic
-- Add door animation tweening rather than instant unlock
-- Add end-of-round scoreboard and rewards
-- Add a real escape UI and fail/win overlays
+Next ideas to continue expanding the game
+- Add random item placement and objective clues
+- Add flashlight battery + panic meter
+- Add generator events and power-out states
+- Add end-of-round scoreboard and reward currency
+- Add hidey spots and creep-travel map loops
+- Add more dynamic sounds: footsteps, whispering, thunder, radio static
 
 Repository URL: https://github.com/kalemlunca-stack/roblox-granny-system
