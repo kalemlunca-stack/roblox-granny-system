@@ -1,30 +1,51 @@
-# Door & Key system + Granny animation hooks
+# Door & Key system + Escape loop
 
-This patch adds:
-- ServerScriptService/DoorServer.lua — server-side handling for unlocking doors with keys (UseKeyRemote RemoteEvent)
-- ServerScriptService/GrannyAnimator.lua — listens for GrannyState BindableEvent and plays animations/sounds on the Granny model
-- ReplicatedStorage/GrannyAI.lua — updated to emit a BindableEvent (GrannyState) with state changes
-- ReplicatedStorage/Tools/KeyTool/KeyClient.lua — example LocalScript to place inside a Tool named "Key"; it requests unlocking of a target door via UseKeyRemote
+This repository now includes a playable horror loop foundation:
+- server-side Granny AI with looped rounds
+- door unlocking via key tool
+- escape zone + win tracking
+- polished round HUD
 
-How doors work
-1. Create a folder in Workspace named "Doors".
-2. Add door Models inside it. Each door Model should contain one or more BaseParts representing the door geometry.
-3. Optionally add a Bool attribute `Locked` (defaults to true if missing) and a Sound named `Unlock` under the door model.
-4. To unlock, give players a Tool named `Key` (or `Key_<DoorName>` for door-specific keys) with an optional attribute `KeyName` set to the door's name. Place that Tool under ReplicatedStorage.Tools and give it to players when the round starts.
+Files included
+- ReplicatedStorage/GrannyAI.lua — AI ModuleScript for Granny (patrol, hearing, sight, chase, attack)
+- ServerScriptService/GameServer.lua — looped round manager and key distribution
+- ServerScriptService/DoorServer.lua — door unlock validation logic
+- ServerScriptService/EscapeManager.lua — escape zone tracking and player escape status
+- ServerScriptService/GrannyAnimator.lua — optional animation/sound hooks for Granny state changes
+- ReplicatedStorage/Tools/KeyTool/KeyClient.lua — client-side key interaction script
+- StarterGui/RoundUI.lua — HUD for timer and escape tracking
 
-Notes on the Key Tool
-- The example LocalScript expects the Tool to be named "Key" or "Key_<DoorName>" and placed in ReplicatedStorage.Tools.KeyTool as a template.
-- When the player activates the tool while looking at a door (and in range), it sends a UseKeyRemote event to the server with the door's name. The server validates the player has a key tool and then unlocks the door.
+Map setup
+Create a Workspace.Map folder with these pieces:
+- Map
+  - Granny (Model, with Humanoid and PrimaryPart)
+  - GrannySpawn (Part)
+  - PatrolPoints (Folder of waypoints)
+  - PlayerSpawn (SpawnLocation or Part/Folder)
+  - EscapeZone (Part) — players must touch this to escape
+  - Doors (Folder) — door models to unlock with keys
+  - Items (Folder) — optional items reset each round
 
-Granny animations & sounds
-- GrannyAI now fires a BindableEvent `ReplicatedStorage.GrannyState` with a payload {state = <string>, model = <grannyModel>} when the AI changes state (idle, patrol, chase, attack, investigate, search).
-- GrannyAnimator listens for that and plays Animation objects and Sound instances on the granny model. To use it, either:
-  - Put Animation objects under workspace.Map.Granny.Animations named Idle, Patrol, Chase, Attack, Investigate, Search; or
-  - Put them under ReplicatedStorage.GrannyAnimations with those names.
-- Add Sound instances under workspace.Map.Granny named Footstep, Scream, Attack, Unlock (Unlock is used for doors).
+Door usage
+- Place each door in Workspace.Doors
+- Give each door a name matching the key tool name or set it to `MainDoor` by default
+- The included key tool is named `Key`, and the server gives one to each player every round
+- Activate the key while aiming at a door within range; the server validates and unlocks it
 
-Next steps you might want:
-- Add a server script to give Key tools to players at round start (GameServer can be updated to clone tools from ReplicatedStorage.Tools into player.Backpack).
-- Replace the simple door opening with a hinge/tween for smooth animation.
-- Add visual indicators (ProximityPrompt) so players know a door is locked and can interact.
+Escape logic
+- Player `Escaped` BoolValue is set when they touch the EscapeZone part in Workspace.Map
+- The round ends when all players have escaped or everyone is dead
+- GameServer resets all escape values at the start of each round, then loops again automatically
 
+Granny audio/animation hooks
+- GrannyAI fires `ReplicatedStorage.GrannyState` with `{state, model}`
+- GrannyAnimator listens and plays animation/sound assets if present under the Granny model or ReplicatedStorage.GrannyAnimations
+- Example sounds names: Footstep, Scream, Attack
+
+Recommended next upgrades
+- Add smarter AI hiding/ambush logic
+- Add door animation tweening rather than instant unlock
+- Add end-of-round scoreboard and rewards
+- Add a real escape UI and fail/win overlays
+
+Repository URL: https://github.com/kalemlunca-stack/roblox-granny-system
