@@ -1,36 +1,40 @@
 # Roblox horror game system
 
-The project includes a substantial horror-game loop with:
-- Granny AI chase/search and ambush behavior
+This project now includes iterative horror-game systems for a more complete stealth loop:
+- Granny AI chase/search/ambush
 - key-based door unlocking
-- round loop and escape win logic
+- escape/win state and round resets
 - XP/coins progression and leaderstats
 - flashlight battery + panic meter
 - generator power outage system
-- dynamic audio scares and ambience events
+- dynamic horror audio event system
+- stealth hide system via HideSpots
 
-Project files
-- ReplicatedStorage/GrannyAI.lua
-- ServerScriptService/GameServer.lua
-- ServerScriptService/DoorServer.lua
-- ServerScriptService/EscapeManager.lua
-- ServerScriptService/FlashlightManager.lua
-- ServerScriptService/GeneratorManager.lua
-- ServerScriptService/AudioEventManager.lua
-- StarterPlayer/FlashlightClient.lua
-- StarterPlayer/GeneratorClient.lua
-- StarterPlayer/AudioClient.lua
-- README.md
+New hide system
+- Put parts or models inside Workspace.Map.HideSpots.
+- Players can stand near a hide spot and press H to hide.
+- The StealthManager tracks `IsHidden` and `StealthLevel` on each player.
+- Hidden players are harder to detect and can reduce noise while remaining hidden.
+- The hide UI in StarterPlayer/HideClient.lua appears when players are near a hide spot.
 
-Dynamic audio system
-- AudioEventManager triggers ambient whisper/thunder/static events at intervals.
-- When players are near Granny, a chase cue plays to intensify terror.
-- Sounds are broadcast via a RemoteEvent to each client.
+Map setup
+Create a Workspace.Map folder with:
+- Granny
+- GrannySpawn
+- PatrolPoints
+- HidePoints
+- AmbushPoints
+- HideSpots
+- PlayerSpawn
+- EscapeZone
+- Doors
+- Items
+- Generator
 
-Recommended next steps
-- add hiding/stealth behavior and object-based cover
-- add progression by map and unlockables
-- add smoother UI transitions and real end-of-round lobby screens
-- add chaotic effects like localized sound propagation and random scare triggers
+Recommended next upgrades
+- add actual stealth-aware Granny detection (ignoring hidden players when behind cover)
+- add hide spot sound effects and vanish animations
+- add more objective-driven rounds and map progression
+- add final polish for scoreboard, lobby, checkpoint, and save state
 
 Repository URL: https://github.com/kalemlunca-stack/roblox-granny-system
