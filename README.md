@@ -1,40 +1,43 @@
-# Roblox horror game system
+# Roblox horror game systems
 
-This project now includes iterative horror-game systems for a more complete stealth loop:
-- Granny AI chase/search/ambush
+This repository contains a looped horror-game foundation with:
+- Granny AI chase/search and ambush behavior
 - key-based door unlocking
-- escape/win state and round resets
-- XP/coins progression and leaderstats
-- flashlight battery + panic meter
-- generator power outage system
-- dynamic horror audio event system
-- stealth hide system via HideSpots
+- escape or death loop
+- XP/coins + leaderstats
+- flashlight + panic meter
+- generator power state
+- dynamic horror audio scares
+- hide spot stealth
+- progression with unlocked maps and profile stats
 
-New hide system
-- Put parts or models inside Workspace.Map.HideSpots.
-- Players can stand near a hide spot and press H to hide.
-- The StealthManager tracks `IsHidden` and `StealthLevel` on each player.
-- Hidden players are harder to detect and can reduce noise while remaining hidden.
-- The hide UI in StarterPlayer/HideClient.lua appears when players are near a hide spot.
+Project files
+- ReplicatedStorage/GrannyAI.lua
+- ServerScriptService/GameServer.lua
+- ServerScriptService/DoorServer.lua
+- ServerScriptService/EscapeManager.lua
+- ServerScriptService/FlashlightManager.lua
+- ServerScriptService/GeneratorManager.lua
+- ServerScriptService/AudioEventManager.lua
+- ServerScriptService/StealthManager.lua
+- ServerScriptService/ProgressionManager.lua
+- StarterPlayer/FlashlightClient.lua
+- StarterPlayer/GeneratorClient.lua
+- StarterPlayer/AudioClient.lua
+- StarterPlayer/HideClient.lua
+- StarterPlayer/ProgressionClient.lua
+- README.md
 
-Map setup
-Create a Workspace.Map folder with:
-- Granny
-- GrannySpawn
-- PatrolPoints
-- HidePoints
-- AmbushPoints
-- HideSpots
-- PlayerSpawn
-- EscapeZone
-- Doors
-- Items
-- Generator
+Progression setup
+- The ProgressionManager stores a simple profile per player in a DataStore.
+- Each player starts with `Default` unlocked.
+- After a round, their score is compared to best score and new maps can be unlocked.
+- A `Profile` attribute is attached to each player and mirrored to the UI.
 
 Recommended next upgrades
-- add actual stealth-aware Granny detection (ignoring hidden players when behind cover)
-- add hide spot sound effects and vanish animations
-- add more objective-driven rounds and map progression
-- add final polish for scoreboard, lobby, checkpoint, and save state
+- add multiple real map variants and transitions
+- add lobby and round summary screens
+- add saveable unlockables and custom skins
+- add more hostile AI behavior with different enemy patterns
 
 Repository URL: https://github.com/kalemlunca-stack/roblox-granny-system
